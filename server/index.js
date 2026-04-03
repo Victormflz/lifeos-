@@ -1,56 +1,44 @@
 const express = require('express')
 const cors = require('cors')
+const helmet = require('helmet')
+const rateLimit = require('express-rate-limit')
 const mongoose = require('mongoose')
 require('dotenv').config()
 
+const workoutsRouter = require('./routes/workouts')
+const authRouter     = require('./routes/auth')
+const habitsRouter   = require('./routes/habits')
+
 const app = express()
+
+// Seguridad y middleware
+app.use(helmet())
 app.use(cors())
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*')
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept')
-  res.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS')
-  next()
-})
 app.use(express.json())
+app.use(rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiadas peticiones, intenta más tarde' }
+}))
 
 // Conexión a MongoDB
 mongoose.connect(process.env.MONGODB_URI)
   .then(() => console.log('MongoDB conectado'))
   .catch(err => console.error('Error MongoDB:', err))
 
-// Esquema de workout
-const workoutSchema = new mongoose.Schema({
-  exercise: String,
-  sets: Number,
-  reps: Number,
-  weight: Number,
-  date: { type: Date, default: Date.now }
+// Rutas
+app.use('/api/auth',     authRouter)
+app.use('/api/workouts', workoutsRouter)
+app.use('/api/habits',   habitsRouter)
+
+// Manejador global de errores
+app.use((err, req, res, next) => {
+  console.error(err)
+  res.status(500).json({ error: 'Error interno del servidor' })
 })
 
-const Workout = mongoose.model('Workout', workoutSchema)
-
-// GET — obtener todos
-app.get('/api/workouts', async (req, res) => {
-  const workouts = await Workout.find().sort({ date: -1 })
-  res.json(workouts)
-})
-
-// POST — crear uno nuevo
-app.post('/api/workouts', async (req, res) => {
-  const { exercise, sets, reps, weight } = req.body
-
-  if (!exercise || !sets || !reps || !weight) {
-    return res.status(400).json({ error: 'Faltan campos' })
-  }
-
-  const workout = await Workout.create({ exercise, sets, reps, weight })
-  res.status(201).json(workout)
-})
-
-// DELETE — borrar por id
-app.delete('/api/workouts/:id', async (req, res) => {
-  await Workout.findByIdAndDelete(req.params.id)
-  res.json({ ok: true })
-})
-
-app.listen(process.env.PORT || 3001, () => console.log('API corriendo'))
+app.listen(process.env.PORT || 3001, () =>
+  console.log(`API corriendo en puerto ${process.env.PORT || 3001}`)
+)
