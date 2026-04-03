@@ -47,4 +47,4 @@ app.delete('/api/workouts/:id', async (req, res) => {
   res.json({ ok: true })
 })
 
-app.listen(3001, () => console.log('API corriendo en http://localhost:3001'))
+app.listen(process.env.PORT || 3001, () => console.log('API corriendo'))
