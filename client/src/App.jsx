@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import WorkoutChart from './WorkoutChart'
 
-const API = 'http://localhost:3001/api'
+const API = 'https://lifeos-production-08cb.up.railway.app/api'
 
 export default function App() {
   const [workouts, setWorkouts] = useState([])
