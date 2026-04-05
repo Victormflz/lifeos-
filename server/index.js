@@ -8,6 +8,7 @@ require('dotenv').config()
 const workoutsRouter = require('./routes/workouts')
 const authRouter     = require('./routes/auth')
 const habitsRouter   = require('./routes/habits')
+const routinesRouter = require('./routes/routines')
 
 const app = express()
 
@@ -32,6 +33,7 @@ mongoose.connect(process.env.MONGODB_URI)
 app.use('/api/auth',     authRouter)
 app.use('/api/workouts', workoutsRouter)
 app.use('/api/habits',   habitsRouter)
+app.use('/api/routines', routinesRouter)
 
 // Manejador global de errores
 app.use((err, req, res, next) => {

@@ -10,6 +10,8 @@ export default function GymTracker() {
   const [form, setForm] = useState({ exercise: '', sets: '', reps: '', weight: '' })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [routines, setRoutines] = useState([])
+  const [activeRoutine, setActiveRoutine] = useState(null)
 
   const authHeader = { Authorization: `Bearer ${token}` }
 
@@ -25,6 +27,13 @@ export default function GymTracker() {
   }, [token]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { fetchWorkouts() }, [fetchWorkouts])
+
+  useEffect(() => {
+    fetch(`${API}/routines`)
+      .then(r => r.json())
+      .then(setRoutines)
+      .catch(() => {})
+  }, [])
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -62,6 +71,43 @@ export default function GymTracker() {
     <div>
       <h1 style={{ fontSize: 22, marginBottom: 4 }}>💪 Gym Tracker</h1>
       <p style={{ color: '#888', fontSize: 13, marginBottom: 24 }}>Registra tus series del día</p>
+
+      {/* Selector de plantillas */}
+      {routines.length > 0 && (
+        <div style={{ marginBottom: 20 }}>
+          <p style={{ fontSize: 12, color: '#888', margin: '0 0 8px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Plantilla</p>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: activeRoutine ? 10 : 0 }}>
+            {routines.map(r => (
+              <button
+                key={r._id}
+                type="button"
+                onClick={() => setActiveRoutine(activeRoutine?._id === r._id ? null : r)}
+                style={routineChipStyle(activeRoutine?._id === r._id)}
+              >
+                {r.name}
+              </button>
+            ))}
+            <button type="button" onClick={() => setActiveRoutine(null)} style={routineChipStyle(!activeRoutine)}>
+              Libre
+            </button>
+          </div>
+          {activeRoutine && (
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {activeRoutine.exercises.map(ex => (
+                <button
+                  key={ex}
+                  type="button"
+                  onClick={() => setForm(f => ({ ...f, exercise: ex }))}
+                  style={exChipStyle}
+                  title="Clic para cargar en el formulario"
+                >
+                  {ex}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 32 }}>
         <input
@@ -121,4 +167,13 @@ const cardStyle = {
 const deleteStyle = {
   background: 'none', border: 'none', cursor: 'pointer',
   color: '#aaa', fontSize: 16, padding: 4
+}
+const routineChipStyle = (active) => ({
+  padding: '6px 14px', borderRadius: 20, fontSize: 13, cursor: 'pointer', fontWeight: active ? 600 : 400,
+  background: active ? '#18181b' : '#f5f5f5', color: active ? '#fff' : '#555',
+  border: active ? '2px solid #18181b' : '2px solid transparent'
+})
+const exChipStyle = {
+  padding: '5px 12px', borderRadius: 20, fontSize: 12, cursor: 'pointer',
+  background: '#f0f0f0', color: '#333', border: '1px solid #e0e0e0'
 }

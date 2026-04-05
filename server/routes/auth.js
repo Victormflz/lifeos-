@@ -26,7 +26,7 @@ router.post('/register', async (req, res, next) => {
     const hash = await bcrypt.hash(password, SALT_ROUNDS)
     const user = await User.create({ email, password: hash })
 
-    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '30d' })
+    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '365d' })
     res.status(201).json({ token })
   } catch (err) {
     next(err)
@@ -53,7 +53,7 @@ router.post('/login', async (req, res, next) => {
       return res.status(401).json({ error: 'Credenciales incorrectas' })
     }
 
-    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '30d' })
+    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '365d' })
     res.json({ token })
   } catch (err) {
     next(err)
