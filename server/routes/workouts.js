@@ -8,6 +8,7 @@ const requireAuth = require('../middleware/auth')
 router.use(requireAuth)
 
 // GET — obtener todos los del usuario (opcionalmente filtrar por ?date=YYYY-MM-DD)
+// TODO: el frontend debería pasar siempre ?date=hoy para evitar cargar todo el historial
 router.get('/', async (req, res, next) => {
   try {
     const query = { userId: req.userId }
@@ -28,13 +29,13 @@ router.get('/', async (req, res, next) => {
 // POST — crear uno nuevo
 router.post('/', async (req, res, next) => {
   try {
-    const { exercise, sets, reps, weight } = req.body
+    const { exercise, sets, reps, weight, notes } = req.body
 
     if (!exercise || sets == null || reps == null || weight == null) {
       return res.status(400).json({ error: 'Faltan campos' })
     }
 
-    const workout = await Workout.create({ userId: req.userId, exercise, sets, reps, weight })
+    const workout = await Workout.create({ userId: req.userId, exercise, sets, reps, weight, notes })
     res.status(201).json(workout)
   } catch (err) {
     next(err)
@@ -96,13 +97,16 @@ router.get('/weekly-summary', async (req, res, next) => {
 // PUT — actualizar un ejercicio (solo el dueño)
 router.put('/:id', async (req, res, next) => {
   try {
-    const { exercise, sets, reps, weight } = req.body
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ error: 'ID inválido' })
+    }
+    const { exercise, sets, reps, weight, notes } = req.body
     if (!exercise || sets == null || reps == null || weight == null) {
       return res.status(400).json({ error: 'Faltan campos' })
     }
     const updated = await Workout.findOneAndUpdate(
       { _id: req.params.id, userId: req.userId },
-      { exercise, sets, reps, weight },
+      { exercise, sets, reps, weight, notes },
       { new: true, runValidators: true }
     )
     if (!updated) return res.status(404).json({ error: 'No encontrado' })
@@ -115,6 +119,9 @@ router.put('/:id', async (req, res, next) => {
 // DELETE — borrar por id (solo el dueño)
 router.delete('/:id', async (req, res, next) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ error: 'ID inválido' })
+    }
     const deleted = await Workout.findOneAndDelete({ _id: req.params.id, userId: req.userId })
     if (!deleted) return res.status(404).json({ error: 'No encontrado' })
     res.json({ ok: true })

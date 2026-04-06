@@ -1,4 +1,4 @@
-const CACHE_NAME = 'lifeos-v1'
+const CACHE_NAME = 'lifeos-v2'
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -28,6 +28,8 @@ self.addEventListener('activate', event => {
 // Estrategia: red primero, cache como fallback
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return
+  // No cachear llamadas a la API — siempre deben ir a la red
+  if (event.request.url.includes('/api/')) return
 
   event.respondWith(
     fetch(event.request)
