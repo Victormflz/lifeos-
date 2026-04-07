@@ -2,10 +2,21 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import WorkoutChart from '../WorkoutChart'
 import { useAuth } from '../context/AuthContext'
 import { API_URL as API } from '../config'
+import { exportToCsv } from '../utils/exportCsv'
+
+const HISTORY_LIMIT = 50
 
 export default function GymTracker() {
   const { token } = useAuth()
+  // todayWorkouts: sesión del día (siempre filtrada por ?date=hoy)
+  const [todayWorkouts, setTodayWorkouts] = useState([])
+  const [todayLoading, setTodayLoading] = useState(true)
+  // workouts: historial completo para el chart (paginado)
   const [workouts, setWorkouts] = useState([])
+  const [historyTotal, setHistoryTotal] = useState(0)
+  const [historyPage, setHistoryPage] = useState(0)
+  const [historyLoading, setHistoryLoading] = useState(false)
+
   const [form, setForm] = useState({ exercise: '', sets: '', reps: '', weight: '', notes: '' })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -28,16 +39,38 @@ export default function GymTracker() {
     [token]
   )
 
-  const fetchWorkouts = useCallback(async () => {
+  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], [])
+
+  // Carga los entrenamientos de HOY (filtro de fecha obligatorio — evita cargar historial)
+  const fetchTodayWorkouts = useCallback(async () => {
+    setTodayLoading(true)
     try {
-      const res = await fetch(`${API}/workouts`, { headers: authHeader })
+      const res = await fetch(`${API}/workouts?date=${todayStr}`, { headers: authHeader })
       if (!res.ok) throw new Error('Error al cargar')
-      const data = await res.json()
-      setWorkouts(data)
+      setTodayWorkouts(await res.json())
     } catch {
       setError('No se pudieron cargar los entrenamientos')
+    } finally {
+      setTodayLoading(false)
     }
-  }, [token]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [authHeader, todayStr])
+
+  // Carga el historial paginado para el gráfico (sin filtro de fecha, con limit/skip)
+  const fetchHistory = useCallback(async (pageNum = 0) => {
+    setHistoryLoading(true)
+    try {
+      const skip = pageNum * HISTORY_LIMIT
+      const res  = await fetch(`${API}/workouts?limit=${HISTORY_LIMIT}&skip=${skip}`, { headers: authHeader })
+      if (!res.ok) return
+      const data  = await res.json()
+      const total = parseInt(res.headers.get('X-Total-Count') || '0')
+      setHistoryTotal(total)
+      setHistoryPage(pageNum)
+      if (pageNum === 0) setWorkouts(data)
+      else setWorkouts(prev => [...prev, ...data])
+    } catch { /* silencioso — el chart es opcional */ }
+    finally { setHistoryLoading(false) }
+  }, [authHeader])
 
   const fetchRecords = useCallback(async () => {
     try {
@@ -48,10 +81,11 @@ export default function GymTracker() {
       data.forEach(r => { map[r.exercise] = { weight: r.weight, date: r.date } })
       setRecords(map)
     } catch { /* silencioso — records son opcionales */ }
-  }, [token]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [authHeader])
 
   useEffect(() => {
-    fetchWorkouts()
+    fetchTodayWorkouts()
+    fetchHistory(0)
     fetchRecords()
     fetch(`${API}/routines`)
       .then(r => r.json())
@@ -60,7 +94,7 @@ export default function GymTracker() {
     return () => {
       if (prTimerRef.current) clearTimeout(prTimerRef.current)
     }
-  }, [fetchWorkouts, fetchRecords])
+  }, [fetchTodayWorkouts, fetchHistory, fetchRecords])
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -76,7 +110,8 @@ export default function GymTracker() {
       })
       if (!res.ok) throw new Error('Error al guardar')
       setForm({ exercise: '', sets: '', reps: '', weight: '', notes: '' })
-      fetchWorkouts()
+      fetchTodayWorkouts()
+      fetchHistory(0)
       if (isNewPR) {
         if (prTimerRef.current) clearTimeout(prTimerRef.current)
         setPrBanner(form.exercise)
@@ -93,7 +128,8 @@ export default function GymTracker() {
   async function handleDelete(id) {
     try {
       await fetch(`${API}/workouts/${id}`, { method: 'DELETE', headers: authHeader })
-      fetchWorkouts()
+      fetchTodayWorkouts()
+      fetchHistory(0)
       fetchRecords()
     } catch {
       setError('Error al eliminar el ejercicio')
@@ -114,19 +150,34 @@ export default function GymTracker() {
       })
       if (!res.ok) throw new Error('Error al actualizar')
       setEditingId(null)
-      fetchWorkouts()
+      fetchTodayWorkouts()
+      fetchHistory(0)
       fetchRecords()
     } catch {
       setError('Error al actualizar el ejercicio')
     }
   }
 
-  const today = new Date().toDateString()
-  const todayWorkouts = workouts.filter(w => new Date(w.date).toDateString() === today)
+  function handleExport() {
+    const rows = workouts.map(w => ({
+      fecha:    new Date(w.date).toLocaleDateString('es-ES'),
+      ejercicio: w.exercise,
+      series:   w.sets,
+      reps:     w.reps,
+      peso_kg:  w.weight,
+      notas:    w.notes || '',
+    }))
+    exportToCsv(rows, `gym_historial_lifeos_${todayStr}`)
+  }
 
   return (
     <div>
-      <h1 style={{ fontSize: 22, marginBottom: 4 }}>💪 Gym Tracker</h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+        <h1 style={{ fontSize: 22, margin: 0 }}>💪 Gym Tracker</h1>
+        {workouts.length > 0 && (
+          <button onClick={handleExport} className="btn btn-secondary btn-sm" title="Exportar historial CSV">⬇️ CSV</button>
+        )}
+      </div>
       <p style={{ color: 'var(--color-text-secondary)', fontSize: 13, marginBottom: 24 }}>Registra tus series del día</p>
 
       {/* Banner nuevo PR */}
@@ -206,34 +257,21 @@ export default function GymTracker() {
       </form>
 
       <h2 style={{ fontSize: 16, marginBottom: 12 }}>Sesión de hoy</h2>
-      {todayWorkouts.length === 0
+      {todayLoading ? (
+        <p style={{ color: 'var(--color-text-muted)', fontSize: 14 }}>Cargando…</p>
+      ) : todayWorkouts.length === 0
         ? <p style={{ color: 'var(--color-text-muted)', fontSize: 14 }}>Sin registros hoy. ¡A entrenar!</p>
         : todayWorkouts.map(w => (
           <div key={w._id} style={cardStyle}>
             {editingId === w._id ? (
               <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <input
-                  value={editForm.exercise}
-                  onChange={e => setEditForm({ ...editForm, exercise: e.target.value })}
-                  className="input-field"
-                  placeholder="Ejercicio"
-                />
+                <input value={editForm.exercise} onChange={e => setEditForm({ ...editForm, exercise: e.target.value })} className="input-field" placeholder="Ejercicio" />
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-                  <input type="number" value={editForm.sets} placeholder="Series"
-                    onChange={e => setEditForm({ ...editForm, sets: e.target.value })} className="input-field" />
-                  <input type="number" value={editForm.reps} placeholder="Reps"
-                    onChange={e => setEditForm({ ...editForm, reps: e.target.value })} className="input-field" />
-                  <input type="number" value={editForm.weight} placeholder="Kg"
-                    onChange={e => setEditForm({ ...editForm, weight: e.target.value })} className="input-field" />
+                  <input type="number" value={editForm.sets} placeholder="Series" onChange={e => setEditForm({ ...editForm, sets: e.target.value })} className="input-field" />
+                  <input type="number" value={editForm.reps} placeholder="Reps" onChange={e => setEditForm({ ...editForm, reps: e.target.value })} className="input-field" />
+                  <input type="number" value={editForm.weight} placeholder="Kg" onChange={e => setEditForm({ ...editForm, weight: e.target.value })} className="input-field" />
                 </div>
-                <textarea
-                  value={editForm.notes}
-                  onChange={e => setEditForm({ ...editForm, notes: e.target.value })}
-                  placeholder="Notas (opcional)"
-                  rows={2}
-                  className="input-field"
-                  style={{ resize: 'vertical' }}
-                />
+                <textarea value={editForm.notes} onChange={e => setEditForm({ ...editForm, notes: e.target.value })} placeholder="Notas (opcional)" rows={2} className="input-field" style={{ resize: 'vertical' }} />
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button onClick={() => handleEditSave(w._id)} className="btn btn-primary btn-sm" style={{ flex: 1 }}>Guardar</button>
                   <button onClick={() => setEditingId(null)} className="btn btn-secondary btn-sm" style={{ flex: 1 }}>Cancelar</button>
@@ -343,6 +381,20 @@ export default function GymTracker() {
       </div>
 
       <WorkoutChart workouts={workouts} records={records} />
+
+      {/* Paginación del historial de gráfico */}
+      {workouts.length < historyTotal && (
+        <div style={{ textAlign: 'center', marginTop: 16 }}>
+          <button
+            type="button"
+            onClick={() => fetchHistory(historyPage + 1)}
+            disabled={historyLoading}
+            className="btn btn-secondary"
+          >
+            {historyLoading ? 'Cargando…' : `Cargar más historial (${workouts.length}/${historyTotal})`}
+          </button>
+        </div>
+      )}
     </div>
   )
 }

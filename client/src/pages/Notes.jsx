@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { API_URL as API } from '../config'
+import { exportToCsv } from '../utils/exportCsv'
+
+const LIMIT = 20
 
 function parseTags(str) {
   return str.split(',').map(t => t.trim().toLowerCase()).filter(Boolean).slice(0, 5)
@@ -12,32 +15,66 @@ function formatDate(iso) {
 
 export default function Notes() {
   const { token } = useAuth()
-  const [notes, setNotes] = useState([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [newNote, setNewNote] = useState({ title: '', content: '', tags: '' })
+  const [notes, setNotes]         = useState([])
+  const [total, setTotal]         = useState(0)
+  const [page, setPage]           = useState(0)
+  const [loading, setLoading]     = useState(false)
+  const [error, setError]         = useState('')
+  const [newNote, setNewNote]     = useState({ title: '', content: '', tags: '' })
   const [editingId, setEditingId] = useState(null)
-  const [editForm, setEditForm] = useState({ title: '', content: '', tags: '' })
+  const [editForm, setEditForm]   = useState({ title: '', content: '', tags: '' })
   const [expandedId, setExpandedId] = useState(null)
-  const [search, setSearch] = useState('')
-  const [activeTag, setActiveTag] = useState('')
+  // searchInput: valor del input en tiempo real; search: versión debounced que dispara fetch
+  const [searchInput, setSearchInput] = useState('')
+  const [search, setSearch]           = useState('')
+  const [activeTag, setActiveTag]     = useState('')
 
   const authHeader = { Authorization: `Bearer ${token}` }
 
-  const fetchNotes = useCallback(async () => {
+  // Debounce: 350ms tras dejar de escribir
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput), 350)
+    return () => clearTimeout(t)
+  }, [searchInput])
+
+  // fetchNotes: si hay búsqueda → usa /search (full-text); si no → paginación normal
+  const fetchNotes = useCallback(async (pageNum = 0) => {
     setLoading(true)
     try {
-      const res = await fetch(`${API}/notes`, { headers: authHeader })
-      if (!res.ok) throw new Error()
-      setNotes(await res.json())
+      let data, newTotal
+
+      if (search.trim()) {
+        // Búsqueda full-text (índice $text en MongoDB, sin paginación — devuelve top 20)
+        const res = await fetch(
+          `${API}/notes/search?q=${encodeURIComponent(search.trim())}`,
+          { headers: authHeader }
+        )
+        if (!res.ok) throw new Error()
+        data     = await res.json()
+        newTotal = data.length
+      } else {
+        // Listado paginado, opcionalmente filtrado por tag
+        const params = new URLSearchParams({ limit: LIMIT, skip: pageNum * LIMIT })
+        if (activeTag) params.set('tag', activeTag)
+        const res = await fetch(`${API}/notes?${params}`, { headers: authHeader })
+        if (!res.ok) throw new Error()
+        data     = await res.json()
+        newTotal = parseInt(res.headers.get('X-Total-Count') || '0')
+      }
+
+      setTotal(newTotal)
+      setPage(pageNum)
+      if (pageNum === 0) setNotes(data)
+      else setNotes(prev => [...prev, ...data])
     } catch {
       setError('No se pudieron cargar las notas')
     } finally {
       setLoading(false)
     }
-  }, [token]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [token, search, activeTag]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => { fetchNotes() }, [fetchNotes])
+  // Re-fetch desde el inicio cuando cambia search o activeTag
+  useEffect(() => { fetchNotes(0) }, [fetchNotes])
 
   async function handleCreate(e) {
     e.preventDefault()
@@ -54,7 +91,7 @@ export default function Notes() {
         throw new Error(data.error || 'Error al crear')
       }
       setNewNote({ title: '', content: '', tags: '' })
-      fetchNotes()
+      fetchNotes(0) // recarga desde la primera página
     } catch (err) {
       setError(err.message)
     }
@@ -93,6 +130,7 @@ export default function Notes() {
       const res = await fetch(`${API}/notes/${id}`, { method: 'DELETE', headers: authHeader })
       if (!res.ok) throw new Error('Error al eliminar')
       setNotes(prev => prev.filter(n => n._id !== id))
+      setTotal(prev => prev - 1)
       if (expandedId === id) setExpandedId(null)
     } catch (err) {
       setError(err.message)
@@ -103,21 +141,31 @@ export default function Notes() {
     setExpandedId(prev => prev === id ? null : id)
   }
 
-  // Filtrado local por búsqueda y tag activo
-  const visibleNotes = notes.filter(n => {
-    const matchSearch = search.trim() === '' || n.title.toLowerCase().includes(search.trim().toLowerCase())
-    const matchTag    = activeTag === '' || n.tags.includes(activeTag)
-    return matchSearch && matchTag
-  })
-
-  // Todas las tags únicas de todas las notas para el panel de filtros
+  // Tags únicas de las notas cargadas (para el panel de filtros)
   const allTags = [...new Set(notes.flatMap(n => n.tags))].sort()
+  const hasMore = !search.trim() && notes.length < total
+
+  function handleExport() {
+    const today = new Date().toISOString().split('T')[0]
+    const rows = notes.map(n => ({
+      titulo:  n.title,
+      tags:    (n.tags || []).join(', '),
+      contenido: n.content || '',
+      creado:  new Date(n.createdAt).toLocaleDateString('es-ES'),
+    }))
+    exportToCsv(rows, `notas_lifeos_${today}`)
+  }
 
   return (
     <div>
-      <h1 style={{ fontSize: 22, marginBottom: 4 }}>📝 Notas</h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+        <h1 style={{ fontSize: 22, margin: 0 }}>📝 Notas</h1>
+        {notes.length > 0 && (
+          <button onClick={handleExport} className="btn btn-secondary btn-sm" title="Exportar CSV">⬇️ CSV</button>
+        )}
+      </div>
       <p style={{ color: 'var(--color-text-secondary)', fontSize: 13, marginBottom: 24 }}>
-        {notes.length === 0 ? 'Sin notas aún' : `${visibleNotes.length} de ${notes.length} nota${notes.length > 1 ? 's' : ''}`}
+        {notes.length === 0 ? 'Sin notas aún' : `${notes.length}${hasMore || search.trim() ? '+' : ''} nota${notes.length !== 1 ? 's' : ''}`}
       </p>
 
       {/* Formulario de creación */}
@@ -151,18 +199,18 @@ export default function Notes() {
         <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>+ Añadir nota</button>
       </form>
 
-      {/* Barra de búsqueda */}
+      {/* Barra de búsqueda — usa índice $text de MongoDB cuando hay término */}
       <div style={{ marginBottom: 12 }}>
         <input
-          placeholder="🔍 Buscar por título..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
+          placeholder="🔍 Buscar por título o contenido..."
+          value={searchInput}
+          onChange={e => { setSearchInput(e.target.value); setActiveTag('') }}
           className="input-field"
         />
       </div>
 
-      {/* Filtro por etiquetas */}
-      {allTags.length > 0 && (
+      {/* Filtro por etiquetas (solo en modo normal, no en búsqueda) */}
+      {!search.trim() && allTags.length > 0 && (
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
           {allTags.map(tag => (
             <button
@@ -200,14 +248,14 @@ export default function Notes() {
         <p style={{ color: 'var(--color-text-muted)', fontSize: 14, textAlign: 'center', padding: '32px 0' }}>Cargando...</p>
       )}
 
-      {!loading && notes.length === 0 && (
+      {!loading && notes.length === 0 && !search.trim() && (
         <div style={emptyStyle}>
           <p style={{ fontSize: 40, margin: 0 }}>📄</p>
           <p style={{ color: 'var(--color-text-secondary)', fontSize: 14, marginTop: 8 }}>Crea tu primera nota</p>
         </div>
       )}
 
-      {!loading && notes.length > 0 && visibleNotes.length === 0 && (
+      {!loading && notes.length > 0 && search.trim() && notes.length === 0 && (
         <div style={emptyStyle}>
           <p style={{ fontSize: 32, margin: 0 }}>🔍</p>
           <p style={{ color: 'var(--color-text-secondary)', fontSize: 14, marginTop: 8 }}>Sin resultados para esa búsqueda</p>
@@ -215,7 +263,7 @@ export default function Notes() {
       )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {visibleNotes.map(note => (
+        {notes.map(note => (
           <div key={note._id} style={cardStyle}>
             {editingId === note._id ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%' }}>
@@ -306,6 +354,20 @@ export default function Notes() {
           </div>
         ))}
       </div>
+
+      {/* Paginación: cargar más notas */}
+      {hasMore && (
+        <div style={{ textAlign: 'center', marginTop: 16 }}>
+          <button
+            type="button"
+            onClick={() => fetchNotes(page + 1)}
+            disabled={loading}
+            className="btn btn-secondary"
+          >
+            {loading ? 'Cargando…' : `Cargar más (${notes.length}/${total})`}
+          </button>
+        </div>
+      )}
     </div>
   )
 }

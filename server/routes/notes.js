@@ -6,14 +6,41 @@ const requireAuth = require('../middleware/auth')
 
 router.use(requireAuth)
 
-// GET — listar notas del usuario, ordenadas por updatedAt desc
-// Soporta ?search= (búsqueda por título) y ?tag= (filtro por etiqueta)
+// GET /search?q=término — búsqueda full-text sobre título + contenido usando índice $text
+// (debe ir ANTES del GET / para que Express no lo confunda con un /:id)
+router.get('/search', async (req, res, next) => {
+  try {
+    const q = req.query.q?.trim()
+    if (!q) return res.json([])
+    const notes = await Note.find(
+      { userId: req.userId, $text: { $search: q } },
+      { score: { $meta: 'textScore' } }
+    )
+      .sort({ score: { $meta: 'textScore' } })
+      .limit(20)
+    res.json(notes)
+  } catch (err) {
+    next(err)
+  }
+})
+
+// GET / — listar notas del usuario, ordenadas por updatedAt desc
+// ?tag=etiqueta  → filtro por etiqueta exacta
+// ?limit=20&skip=0 → paginación (máx 100 por petición)
+// Header X-Total-Count incluye el total de documentos que coinciden
 router.get('/', async (req, res, next) => {
   try {
     const filter = { userId: req.userId }
-    if (req.query.tag)    filter.tags  = req.query.tag
-    if (req.query.search) filter.title = { $regex: req.query.search, $options: 'i' }
-    const notes = await Note.find(filter).sort({ updatedAt: -1 })
+    if (req.query.tag) filter.tags = req.query.tag
+
+    const limit = Math.min(Math.max(parseInt(req.query.limit) || 20, 1), 100)
+    const skip  = Math.max(parseInt(req.query.skip) || 0, 0)
+
+    const [notes, total] = await Promise.all([
+      Note.find(filter).sort({ updatedAt: -1 }).skip(skip).limit(limit),
+      Note.countDocuments(filter),
+    ])
+    res.setHeader('X-Total-Count', String(total))
     res.json(notes)
   } catch (err) {
     next(err)

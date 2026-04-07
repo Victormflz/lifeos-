@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { API_URL as API } from '../config'
+import { exportToCsv } from '../utils/exportCsv'
 
 const EMOJIS = ['⭐', '💧', '📚', '🏃', '🧘', '🥗', '😴', '💊', '🧹', '✍️']
 
@@ -156,13 +157,30 @@ export default function Habits() {
 
   const completed = habits.filter(h => h.completions.includes(today)).length
 
+  function handleExport() {
+    const rows = habits.map(h => ({
+      nombre:       h.name,
+      emoji:        h.emoji,
+      frecuencia:   h.frequency,
+      racha_actual: getStreak(h.completions, h.frequency),
+      total_completados: h.completions.length,
+      ultima_vez:   h.completions.sort((a, b) => (a > b ? -1 : 1))[0] || '',
+    }))
+    exportToCsv(rows, `habitos_lifeos_${today}`)
+  }
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
         <h1 style={{ fontSize: 22, margin: 0 }}>✅ Hábitos</h1>
-        <button onClick={() => setShowForm(v => !v)} className="btn btn-primary btn-sm">
-          {showForm ? '✕' : '+ Nuevo'}
-        </button>
+        <div style={{ display: 'flex', gap: 6 }}>
+          {habits.length > 0 && (
+            <button onClick={handleExport} className="btn btn-secondary btn-sm" title="Exportar CSV">⬇️ CSV</button>
+          )}
+          <button onClick={() => setShowForm(v => !v)} className="btn btn-primary btn-sm">
+            {showForm ? '✕' : '+ Nuevo'}
+          </button>
+        </div>
       </div>
       <p style={{ color: 'var(--color-text-secondary)', fontSize: 13, marginBottom: 24 }}>
         {habits.length === 0 ? 'Sin hábitos aún' : `${completed} / ${habits.length} completados hoy`}

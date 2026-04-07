@@ -12,6 +12,7 @@ import {
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
 import { API_URL as API } from '../config'
+import { exportToCsv } from '../utils/exportCsv'
 
 ChartJS.register(BarElement, CategoryScale, LinearScale, Tooltip, LineElement, PointElement)
 
@@ -254,14 +255,32 @@ export default function Sleep() {
     },
   }), [tickColor, gridColor])
 
+  function handleExport() {
+    const today = new Date().toISOString().split('T')[0]
+    const rows = records.map(r => ({
+      fecha:       r.date,
+      acostarse:   r.bedtime,
+      despertar:   r.wakeTime,
+      horas_total: r.hoursTotal,
+      calidad:     r.quality,
+      notas:       r.notes || '',
+    }))
+    exportToCsv(rows, `sueno_lifeos_${today}`)
+  }
+
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
         <h1 style={{ fontSize: 22, margin: 0 }}>😴 Sueño</h1>
-        <button onClick={() => { setShowForm(v => !v); setError('') }} className="btn btn-primary btn-sm">
-          {showForm ? '✕' : '+ Registrar'}
-        </button>
+        <div style={{ display: 'flex', gap: 6 }}>
+          {records.length > 0 && (
+            <button onClick={handleExport} className="btn btn-secondary btn-sm" title="Exportar CSV">⬇️ CSV</button>
+          )}
+          <button onClick={() => { setShowForm(v => !v); setError('') }} className="btn btn-primary btn-sm">
+            {showForm ? '✕' : '+ Registrar'}
+          </button>
+        </div>
       </div>
       <p style={{ color: 'var(--color-text-secondary)', fontSize: 13, marginBottom: 24 }}>
         {records.length === 0

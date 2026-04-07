@@ -7,8 +7,10 @@ const requireAuth = require('../middleware/auth')
 // Todas las rutas requieren autenticación
 router.use(requireAuth)
 
-// GET — obtener todos los del usuario (opcionalmente filtrar por ?date=YYYY-MM-DD)
-// TODO: el frontend debería pasar siempre ?date=hoy para evitar cargar todo el historial
+// GET — obtener workouts del usuario
+// ?date=YYYY-MM-DD  → filtra por día exacto (devuelve todo el día, sin límite de paginación)
+// ?limit=50&skip=0  → paginación sobre el historial completo (máx 200 por petición)
+// Header X-Total-Count incluye el total de documentos que coinciden con el filtro
 router.get('/', async (req, res, next) => {
   try {
     const query = { userId: req.userId }
@@ -19,7 +21,16 @@ router.get('/', async (req, res, next) => {
       end.setUTCHours(23, 59, 59, 999)
       query.date = { $gte: start, $lte: end }
     }
-    const workouts = await Workout.find(query).sort({ date: -1 })
+    // Cuando se filtra por fecha, el día entero es siempre pequeño; default a 200
+    const defaultLimit = req.query.date ? 200 : 50
+    const limit = Math.min(Math.max(parseInt(req.query.limit) || defaultLimit, 1), 200)
+    const skip  = Math.max(parseInt(req.query.skip) || 0, 0)
+
+    const [workouts, total] = await Promise.all([
+      Workout.find(query).sort({ date: -1 }).skip(skip).limit(limit),
+      Workout.countDocuments(query),
+    ])
+    res.setHeader('X-Total-Count', String(total))
     res.json(workouts)
   } catch (err) {
     next(err)

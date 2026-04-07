@@ -11,6 +11,7 @@ const habitsRouter   = require('./routes/habits')
 const routinesRouter = require('./routes/routines')
 const notesRouter    = require('./routes/notes')
 const sleepRouter    = require('./routes/sleep')
+const insightsRouter = require('./routes/insights')
 
 const app = express()
 
@@ -52,6 +53,7 @@ app.use('/api/habits',   habitsRouter)
 app.use('/api/routines', routinesRouter)
 app.use('/api/notes',    notesRouter)
 app.use('/api/sleep',    sleepRouter)
+app.use('/api/insights', insightsRouter)
 
 // Manejador global de errores
 app.use((err, req, res, next) => {

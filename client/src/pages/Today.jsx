@@ -1,7 +1,19 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Link } from 'react-router-dom'
+import { Line } from 'react-chartjs-2'
+import {
+  Chart as ChartJS,
+  LineElement,
+  PointElement,
+  LinearScale,
+  CategoryScale,
+  Tooltip,
+} from 'chart.js'
 import { useAuth } from '../context/AuthContext'
+import { useTheme } from '../context/ThemeContext'
 import { API_URL as API } from '../config'
+
+ChartJS.register(LineElement, PointElement, LinearScale, CategoryScale, Tooltip)
 
 function getGreeting() {
   const hour = new Date().getHours()
@@ -19,7 +31,8 @@ function getTodayLabel() {
   return str.charAt(0).toUpperCase() + str.slice(1)
 }
 
-const SLEEP_QUALITY = { 1: '😴', 2: '😪', 3: '😐', 4: '😊', 5: '🌟' }
+const SLEEP_QUALITY  = { 1: '😴', 2: '😪', 3: '😐', 4: '😊', 5: '🌟' }
+const INSIGHT_ICONS  = { sleep: '😴', habits: '✅', gym: '🏋️' }
 
 function sleepHoursColor(h) {
   if (h < 6) return '#ef4444'
@@ -27,8 +40,80 @@ function sleepHoursColor(h) {
   return '#10b981'
 }
 
+function maxDailyStreak(habits, todayStr) {
+  let max = 0
+  for (const h of habits.filter(h => h.frequency === 'daily')) {
+    const sorted = [...h.completions].sort((a, b) => (a > b ? -1 : 1))
+    let streak = 0
+    const cursor = new Date(todayStr)
+    for (let i = 0; i < 365; i++) {
+      const key = cursor.toISOString().split('T')[0]
+      if (sorted.includes(key)) { streak++ }
+      else if (i > 0) break
+      cursor.setDate(cursor.getDate() - 1)
+    }
+    if (streak > max) max = streak
+  }
+  return max
+}
+
+function getScoreColor(s) {
+  if (s >= 80) return '#10b981'   // verde
+  if (s >= 60) return '#f59e0b'   // naranja
+  return '#ef4444'                // rojo
+}
+
+function ScoreChart({ history }) {
+  const { theme } = useTheme()
+  const tickColor = theme === 'dark' ? '#6b7280' : '#888888'
+  const gridColor = theme === 'dark' ? '#2e2e32' : '#e5e7eb'
+
+  const data = {
+    labels: history.map(s => s.date.slice(5)),    // MM-DD
+    datasets: [{
+      data:            history.map(s => s.score),
+      borderColor:     '#6366f1',
+      backgroundColor: theme === 'dark' ? 'rgba(99,102,241,0.15)' : 'rgba(99,102,241,0.1)',
+      fill:            true,
+      tension:         0.35,
+      pointRadius:     history.length < 10 ? 4 : 2,
+      pointHoverRadius: 6,
+    }],
+  }
+
+  const options = {
+    responsive:  true,
+    plugins: {
+      legend:  { display: false },
+      tooltip: { callbacks: { label: ctx => `Score: ${ctx.parsed.y}` } },
+    },
+    scales: {
+      y: {
+        min:   0,
+        max:   100,
+        ticks: { stepSize: 25, color: tickColor },
+        grid:  { color: gridColor },
+      },
+      x: {
+        ticks: { color: tickColor, maxTicksLimit: 7 },
+        grid:  { display: false },
+      },
+    },
+  }
+
+  return (
+    <div style={{ marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid var(--color-border)' }}>
+      <p style={{ margin: '0 0 0.5rem', fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text-secondary)' }}>
+        Evolución ({history.length} días)
+      </p>
+      <Line data={data} options={options} />
+    </div>
+  )
+}
+
 export default function Today() {
   const { token } = useAuth()
+  const { theme } = useTheme()
 
   const authHeader = useMemo(
     () => ({ Authorization: `Bearer ${token}` }),
@@ -94,6 +179,7 @@ export default function Today() {
 
   // ── Sleep ─────────────────────────────────────────────────────────────────
   const [lastSleep,    setLastSleep]    = useState(null)
+  const [weekSleep,    setWeekSleep]    = useState([])
   const [sleepLoading, setSleepLoading] = useState(true)
 
   const fetchSleep = useCallback(async () => {
@@ -101,6 +187,7 @@ export default function Today() {
       const res  = await fetch(`${API}/sleep/week`, { headers: authHeader })
       if (!res.ok) throw new Error()
       const data = await res.json()
+      setWeekSleep(data)
       const found = data.find(r => r.date === todayStr || r.date === yesterdayStr)
       setLastSleep(found || null)
     } catch {
@@ -110,12 +197,66 @@ export default function Today() {
     }
   }, [authHeader, todayStr, yesterdayStr])
 
+  // ── Gym Records ───────────────────────────────────────────────────────────
+  const [gymRecords, setGymRecords] = useState([])
+
+  const fetchGymRecords = useCallback(async () => {
+    try {
+      const res = await fetch(`${API}/workouts/records`, { headers: authHeader })
+      if (!res.ok) throw new Error()
+      setGymRecords(await res.json())
+    } catch { /* silencioso */ }
+  }, [authHeader])
+
+  // ── Insights ──────────────────────────────────────────────────────────────
+  const [insights,        setInsights]        = useState([])
+  const [insightsStats,   setInsightsStats]   = useState(null)
+  const [insightsLoading, setInsightsLoading] = useState(true)
+  const [lifeScore,       setLifeScore]       = useState(null)
+  const [scoreHistory,    setScoreHistory]    = useState([])
+
+  const fetchInsights = useCallback(async () => {
+    try {
+      const res  = await fetch(`${API}/insights`, { headers: authHeader })
+      if (!res.ok) throw new Error()
+      const data = await res.json()
+      setInsights(data.insights || [])
+      setInsightsStats(data.stats || null)
+      setLifeScore(data.score ?? null)
+    } catch { /* silencioso */ } finally {
+      setInsightsLoading(false)
+    }
+  }, [authHeader])
+
+  const fetchScoreHistory = useCallback(async () => {
+    try {
+      const res  = await fetch(`${API}/insights/score/history`, { headers: authHeader })
+      if (!res.ok) throw new Error()
+      setScoreHistory(await res.json())
+    } catch { /* silencioso */ }
+  }, [authHeader])
+
   // ── Initial load ──────────────────────────────────────────────────────────
   useEffect(() => {
     fetchHabits()
     fetchWorkouts()
     fetchSleep()
-  }, [fetchHabits, fetchWorkouts, fetchSleep])
+    fetchGymRecords()
+    fetchInsights()
+    fetchScoreHistory()
+  }, [fetchHabits, fetchWorkouts, fetchSleep, fetchGymRecords, fetchInsights, fetchScoreHistory])
+
+  // ── Stats derivados ───────────────────────────────────────────────────────
+  const longestStreak   = useMemo(() => maxDailyStreak(habits, todayStr), [habits, todayStr])
+  const avgSleep        = useMemo(() => {
+    if (!weekSleep.length) return null
+    return Math.round((weekSleep.reduce((s, r) => s + r.hoursTotal, 0) / weekSleep.length) * 10) / 10
+  }, [weekSleep])
+  const monthStr        = todayStr.slice(0, 7)
+  const prsThisMonth    = useMemo(
+    () => gymRecords.filter(r => r.date && new Date(r.date).toISOString().slice(0, 7) === monthStr).length,
+    [gymRecords, monthStr]
+  )
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -126,6 +267,70 @@ export default function Today() {
         <p style={styles.greeting}>{getGreeting()}</p>
         <h1 style={styles.date}>{getTodayLabel()}</h1>
       </header>
+      {/* ── Life Score ─────────────────────────────────────────────── */}
+      <section style={{ ...styles.card, ...styles.scoreCard }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <h2 style={{ ...styles.cardTitle, marginBottom: '0.25rem' }}>Life Score</h2>
+            <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>
+              Hábitos · Sueño · Gym
+            </p>
+          </div>
+          {lifeScore === null ? (
+            <div style={{ ...styles.skeleton, height: '2.5rem', width: '5rem', marginBottom: 0 }} />
+          ) : (
+            <div style={{ textAlign: 'right' }}>
+              <span style={{
+                fontSize:   '2.5rem',
+                fontWeight: 800,
+                lineHeight: 1,
+                color:      getScoreColor(lifeScore),
+                transition: 'color 0.3s ease',
+              }}>
+                {lifeScore}
+              </span>
+              <span style={{ fontSize: '1rem', color: 'var(--color-text-secondary)', fontWeight: 500 }}>
+                 / 100
+              </span>
+            </div>
+          )}
+        </div>
+
+        {lifeScore !== null && (
+          <div style={styles.scoreBar}>
+            <div style={{
+              height:       '100%',
+              width:        `${lifeScore}%`,
+              background:   getScoreColor(lifeScore),
+              borderRadius: 4,
+              transition:   'width 0.6s ease',
+            }} />
+          </div>
+        )}
+
+        {/* ── Evolución ───────────────────────────────────────── */}
+        {scoreHistory.length > 1 && (
+          <ScoreChart history={scoreHistory} />
+        )}
+      </section>
+      {/* ── Stats strip ─────────────────────────────────────────────── */}
+      <div style={styles.statsStrip}>
+        <div style={styles.statChip}>
+          <span style={styles.statChipIcon}>🔥</span>
+          <span style={styles.statChipValue}>{longestStreak > 0 ? longestStreak : '—'}</span>
+          <span style={styles.statChipLabel}>racha días</span>
+        </div>
+        <div style={styles.statChip}>
+          <span style={styles.statChipIcon}>😴</span>
+          <span style={styles.statChipValue}>{avgSleep !== null ? `${avgSleep}h` : '—'}</span>
+          <span style={styles.statChipLabel}>media 7d</span>
+        </div>
+        <div style={styles.statChip}>
+          <span style={styles.statChipIcon}>🏆</span>
+          <span style={styles.statChipValue}>{prsThisMonth > 0 ? prsThisMonth : '—'}</span>
+          <span style={styles.statChipLabel}>PRs este mes</span>
+        </div>
+      </div>
 
       {/* ── Hábitos de hoy ──────────────────────────────────────────── */}
       <section style={styles.card}>
@@ -229,6 +434,38 @@ export default function Today() {
           </p>
         ) : (
           <p style={styles.muted}>Sin entreno registrado hoy</p>
+        )}
+      </section>
+
+      {/* ── Insights ────────────────────────────────────────────────── */}
+      <section style={styles.card}>
+        <h2 style={{ ...styles.cardTitle, marginBottom: '0.75rem' }}>✨ Insights</h2>
+
+        {insightsLoading ? (
+          <>
+            <div style={styles.skeleton} />
+            <div style={styles.skeleton} />
+            <div style={{ ...styles.skeleton, width: '60%' }} />
+          </>
+        ) : insights.length === 0 ? (
+          <p style={styles.muted}>No hay datos suficientes aún</p>
+        ) : (
+          <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
+            {insights.map((ins, i) => (
+              <li key={i} style={styles.insightRow}>
+                <span style={styles.insightIcon}>{INSIGHT_ICONS[ins.type] ?? '📊'}</span>
+                <span style={{ fontSize: '0.9rem', color: 'var(--color-text-primary)' }}>{ins.message}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {insightsStats && !insightsLoading && (
+          <div style={styles.insightStats}>
+            <span>😴 {insightsStats.avgSleep > 0 ? `${insightsStats.avgSleep.toFixed(1)}h` : '—'}</span>
+            <span>✅ {insightsStats.habitCompletionRate > 0 ? `${insightsStats.habitCompletionRate}%` : '—'}</span>
+            <span>🏋️ {insightsStats.prsThisWeek > 0 ? `${insightsStats.prsThisWeek} PR` : '— PR'}</span>
+          </div>
         )}
       </section>
 
@@ -346,5 +583,74 @@ const styles = {
     fontSize:   '0.95rem',
     color:      'var(--color-text-primary)',
     fontWeight: 500,
+  },
+  statsStrip: {
+    display:       'flex',
+    gap:           '0.75rem',
+  },
+  statChip: {
+    flex:          1,
+    display:       'flex',
+    flexDirection: 'column',
+    alignItems:    'center',
+    gap:           '0.1rem',
+    padding:       '0.75rem 0.5rem',
+    background:    'var(--color-surface)',
+    border:        '1px solid var(--color-border)',
+    borderRadius:  12,
+    boxShadow:     'var(--color-shadow)',
+  },
+  statChipIcon: {
+    fontSize: '1.2rem',
+  },
+  skeleton: {
+    height:       '0.75rem',
+    background:   'var(--color-border)',
+    borderRadius: 4,
+    marginBottom: '0.5rem',
+    opacity:      0.6,
+  },
+  insightRow: {
+    display:    'flex',
+    alignItems: 'flex-start',
+    gap:        '0.5rem',
+    lineHeight: 1.4,
+  },
+  insightIcon: {
+    fontSize:   '1.1rem',
+    flexShrink: 0,
+    marginTop:  '0.05rem',
+  },
+  insightStats: {
+    display:        'flex',
+    gap:            '1rem',
+    marginTop:      '0.85rem',
+    paddingTop:     '0.75rem',
+    borderTop:      '1px solid var(--color-border)',
+    fontSize:       '0.82rem',
+    color:          'var(--color-text-secondary)',
+    flexWrap:       'wrap',
+  },
+  scoreCard: {
+    borderLeft: '3px solid var(--color-accent)',
+  },
+  scoreBar: {
+    height:       '6px',
+    background:   'var(--color-border)',
+    borderRadius: 4,
+    marginTop:    '0.85rem',
+    overflow:     'hidden',
+  },
+  statChipValue: {
+    fontSize:   '1.3rem',
+    fontWeight: 700,
+    color:      'var(--color-text-primary)',
+    lineHeight: 1.2,
+  },
+  statChipLabel: {
+    fontSize: '0.7rem',
+    color:    'var(--color-text-secondary)',
+    textAlign: 'center',
+    lineHeight: 1.2,
   },
 }
