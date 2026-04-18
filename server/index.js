@@ -15,12 +15,32 @@ const insightsRouter = require('./routes/insights')
 
 const app = express()
 
+// Railway (y otros reverse proxies) pasan x-forwarded-proto — confiamos en 1 salto
+app.set('trust proxy', 1)
+
+// En producción, redirigir HTTP → HTTPS
+if (process.env.NODE_ENV === 'production') {
+  app.use((req, res, next) => {
+    if (req.headers['x-forwarded-proto'] !== 'https') {
+      return res.redirect(301, `https://${req.headers.host}${req.url}`)
+    }
+    next()
+  })
+}
+
 // CORS — desarrollo: localhost permitido / producción: solo ALLOWED_ORIGIN
 const allowedOrigins = process.env.NODE_ENV === 'production'
   ? [process.env.ALLOWED_ORIGIN].filter(Boolean)
   : ['http://localhost:5173', 'http://localhost:4173']
 
-app.use(helmet())
+app.use(helmet({
+  hsts: {
+    maxAge: 31536000,       // 1 año
+    includeSubDomains: true,
+    preload: true
+  },
+  contentSecurityPolicy: false // Gestionado por el CDN/Vercel del cliente
+}))
 app.use(cors({
   origin(origin, callback) {
     if (!origin || allowedOrigins.includes(origin)) {
