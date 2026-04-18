@@ -28,10 +28,29 @@ if (process.env.NODE_ENV === 'production') {
   })
 }
 
-// CORS — desarrollo: localhost permitido / producción: solo ALLOWED_ORIGIN
-const allowedOrigins = process.env.NODE_ENV === 'production'
-  ? [process.env.ALLOWED_ORIGIN].filter(Boolean)
-  : ['http://localhost:5173', 'http://localhost:4173']
+// CORS — desarrollo: localhost permitido / producción: lista de orígenes desde env
+const DEV_ORIGINS = ['http://localhost:5173', 'http://localhost:4173']
+
+function buildAllowedOrigins() {
+  if (process.env.NODE_ENV !== 'production') return DEV_ORIGINS
+
+  const raw = process.env.ALLOWED_ORIGIN || ''
+  const origins = raw
+    .split(',')
+    .map(o => o.trim())
+    .filter(Boolean)
+
+  if (origins.length === 0) {
+    console.warn(
+      '[CORS] ⚠️  ALLOWED_ORIGIN no está definida en producción. ' +
+      'Todas las peticiones cross-origin serán rechazadas. ' +
+      'Configúrala en Railway con la URL de tu frontend.'
+    )
+  }
+  return origins
+}
+
+const allowedOrigins = buildAllowedOrigins()
 
 app.use(helmet({
   hsts: {
