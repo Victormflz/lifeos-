@@ -1,3 +1,21 @@
 node_modules
-.env
 dist
+
+# Environment variables — NEVER commit real secrets
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+*.lnk
+
+# Build artifacts
+client/dist
+client/.vite
+
+# Logs
+*.log
+npm-debug.log*
