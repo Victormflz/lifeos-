@@ -2,6 +2,7 @@ const express = require('express')
 const cors = require('cors')
 const helmet = require('helmet')
 const rateLimit = require('express-rate-limit')
+const mongoSanitize = require('express-mongo-sanitize')
 const mongoose = require('mongoose')
 require('dotenv').config()
 
@@ -72,6 +73,8 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization']
 }))
 app.use(express.json({ limit: '50kb' }))
+// Eliminar claves con $ y . de req.body/query/params para prevenir inyección NoSQL
+app.use(mongoSanitize())
 app.use(rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos
   max: 100,
