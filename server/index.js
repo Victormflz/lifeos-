@@ -16,36 +16,30 @@ const insightsRouter = require('./routes/insights')
 
 const app = express()
 
-// Railway (y otros reverse proxies) pasan x-forwarded-proto — confiamos en 1 salto
+// Railway termina SSL en su edge — trust proxy para que req.ip sea correcto
 app.set('trust proxy', 1)
 
-// En producción, redirigir HTTP → HTTPS
-if (process.env.NODE_ENV === 'production') {
-  app.use((req, res, next) => {
-    if (req.headers['x-forwarded-proto'] !== 'https') {
-      return res.redirect(308, `https://${req.headers.host}${req.url}`)
-    }
-    next()
-  })
-}
+// Health check ANTES de cualquier middleware — Railway y uptime monitors lo usan
+app.get('/health', (req, res) => res.json({ ok: true }))
 
-// CORS — desarrollo: localhost permitido / producción: lista de orígenes desde env
+// Seguridad HTTP
+app.use(helmet({
+  hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
+  contentSecurityPolicy: false
+}))
+
+// CORS
 const DEV_ORIGINS = ['http://localhost:5173', 'http://localhost:4173']
 
 function buildAllowedOrigins() {
   if (process.env.NODE_ENV !== 'production') return DEV_ORIGINS
 
   const raw = process.env.ALLOWED_ORIGIN || ''
-  const origins = raw
-    .split(',')
-    .map(o => o.trim())
-    .filter(Boolean)
+  const origins = raw.split(',').map(o => o.trim()).filter(Boolean)
 
   if (origins.length === 0) {
     console.warn(
-      '[CORS] ⚠️  ALLOWED_ORIGIN no está definida en producción. ' +
-      'Todas las peticiones cross-origin serán rechazadas. ' +
-      'Configúrala en Railway con la URL de tu frontend.'
+      '[CORS] ⚠️  ALLOWED_ORIGIN no definida — peticiones cross-origin serán rechazadas'
     )
   }
   return origins
@@ -53,14 +47,6 @@ function buildAllowedOrigins() {
 
 const allowedOrigins = buildAllowedOrigins()
 
-app.use(helmet({
-  hsts: {
-    maxAge: 31536000,       // 1 año
-    includeSubDomains: true,
-    preload: true
-  },
-  contentSecurityPolicy: false // Gestionado por el CDN/Vercel del cliente
-}))
 app.use(cors({
   origin(origin, callback) {
     if (!origin || allowedOrigins.includes(origin)) {
@@ -72,11 +58,14 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }))
+
+// Body parsing + sanitización NoSQL
 app.use(express.json({ limit: '50kb' }))
-// Eliminar claves con $ y . de req.body/query/params para prevenir inyección NoSQL
 app.use(mongoSanitize())
+
+// Rate limit global (100 req / 15 min) — /auth/* tiene su propio límite más estricto
 app.use(rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutos
+  windowMs: 15 * 60 * 1000,
   max: 100,
   standardHeaders: true,
   legacyHeaders: false,
@@ -97,10 +86,11 @@ app.use('/api/notes',    notesRouter)
 app.use('/api/sleep',    sleepRouter)
 app.use('/api/insights', insightsRouter)
 
-// Manejador global de errores
+// Error handler global
 app.use((err, req, res, next) => {
   console.error(err)
-  res.status(500).json({ error: 'Error interno del servidor' })
+  const status = err.status || 500
+  res.status(status).json({ error: err.message || 'Error interno del servidor' })
 })
 
 app.listen(process.env.PORT || 3001, () =>
