@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import Nav from './components/Nav'
+import OfflineBanner from './components/OfflineBanner'
 import Today from './pages/Today'
 import GymTracker from './pages/GymTracker'
 import Habits from './pages/Habits'
@@ -17,6 +18,8 @@ export default function App() {
   const { token } = useAuth()
 
   return (
+    <>
+      <OfflineBanner />
       <div className="app-container" style={{ paddingBottom: token ? '80px' : '1.5rem' }}>
       <Routes>
         <Route path="/login" element={<Login />} />
@@ -28,5 +31,6 @@ export default function App() {
       </Routes>
       {token && <Nav />}
     </div>
+    </>
   )
 }
