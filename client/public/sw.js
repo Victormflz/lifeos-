@@ -42,6 +42,9 @@ self.addEventListener('fetch', event => {
 
   const url = new URL(event.request.url)
 
+  // Ignorar esquemas no cacheables (chrome-extension://, etc.)
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return
+
   // 1. API → siempre red, sin caché
   if (url.pathname.startsWith('/api/')) return
 
