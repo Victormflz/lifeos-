@@ -230,11 +230,11 @@ export default function GymTracker() {
           className="input-field"
         />
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
-          <input placeholder="Series" type="number" value={form.sets}
+          <input placeholder="Series" type="number" inputMode="numeric" pattern="[0-9]*" min="1" value={form.sets}
             onChange={e => setForm({ ...form, sets: e.target.value })} className="input-field" />
-          <input placeholder="Reps" type="number" value={form.reps}
+          <input placeholder="Reps" type="number" inputMode="numeric" pattern="[0-9]*" min="1" value={form.reps}
             onChange={e => setForm({ ...form, reps: e.target.value })} className="input-field" />
-          <input placeholder="Kg" type="number" value={form.weight}
+          <input placeholder="Kg" type="number" inputMode="decimal" step="0.5" min="0" value={form.weight}
             onChange={e => setForm({ ...form, weight: e.target.value })} className="input-field" />
         </div>
         {form.exercise && records[form.exercise] && (
@@ -267,9 +267,9 @@ export default function GymTracker() {
               <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <input value={editForm.exercise} onChange={e => setEditForm({ ...editForm, exercise: e.target.value })} className="input-field" placeholder="Ejercicio" />
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-                  <input type="number" value={editForm.sets} placeholder="Series" onChange={e => setEditForm({ ...editForm, sets: e.target.value })} className="input-field" />
-                  <input type="number" value={editForm.reps} placeholder="Reps" onChange={e => setEditForm({ ...editForm, reps: e.target.value })} className="input-field" />
-                  <input type="number" value={editForm.weight} placeholder="Kg" onChange={e => setEditForm({ ...editForm, weight: e.target.value })} className="input-field" />
+                  <input type="number" inputMode="numeric" pattern="[0-9]*" min="1" value={editForm.sets} placeholder="Series" onChange={e => setEditForm({ ...editForm, sets: e.target.value })} className="input-field" />
+                  <input type="number" inputMode="numeric" pattern="[0-9]*" min="1" value={editForm.reps} placeholder="Reps" onChange={e => setEditForm({ ...editForm, reps: e.target.value })} className="input-field" />
+                  <input type="number" inputMode="decimal" step="0.5" min="0" value={editForm.weight} placeholder="Kg" onChange={e => setEditForm({ ...editForm, weight: e.target.value })} className="input-field" />
                 </div>
                 <textarea value={editForm.notes} onChange={e => setEditForm({ ...editForm, notes: e.target.value })} placeholder="Notas (opcional)" rows={2} className="input-field" style={{ resize: 'vertical' }} />
                 <div style={{ display: 'flex', gap: 8 }}>

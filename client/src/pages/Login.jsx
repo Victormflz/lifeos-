@@ -59,25 +59,34 @@ export default function Login() {
         </div>
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <input
-            type="email"
-            placeholder="Email"
-            value={form.email}
-            onChange={e => setForm({ ...form, email: e.target.value })}
-            className="input-field"
-            required
-          />
-          <input
-            type="password"
-            placeholder="Contraseña (mín. 8 caracteres)"
-            value={form.password}
-            onChange={e => setForm({ ...form, password: e.target.value })}
-            className="input-field"
-            required
-          />
-          {error && <p style={{ color: 'var(--color-danger)', fontSize: 13, margin: 0 }}>{error}</p>}
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 13, color: 'var(--color-text-secondary)' }}>
+            Email
+            <input
+              type="email"
+              placeholder="tu@email.com"
+              value={form.email}
+              onChange={e => setForm({ ...form, email: e.target.value })}
+              className="input-field"
+              autoComplete="email"
+              inputMode="email"
+              required
+            />
+          </label>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 13, color: 'var(--color-text-secondary)' }}>
+            Contraseña
+            <input
+              type="password"
+              placeholder="Mínimo 8 caracteres"
+              value={form.password}
+              onChange={e => setForm({ ...form, password: e.target.value })}
+              className="input-field"
+              autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+              required
+            />
+          </label>
+          {error && <p role="alert" style={{ color: 'var(--color-danger)', fontSize: 13, margin: 0 }}>{error}</p>}
           <button type="submit" disabled={loading} className="btn btn-primary" style={{ marginTop: 4 }}>
-            {loading ? 'Cargando...' : mode === 'login' ? 'Entrar' : 'Crear cuenta'}
+            {loading ? 'Procesando...' : mode === 'login' ? 'Entrar' : 'Crear cuenta'}
           </button>
         </form>
       </div>

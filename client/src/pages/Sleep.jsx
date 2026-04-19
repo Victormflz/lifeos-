@@ -87,6 +87,8 @@ function SleepFormFields({ form, setForm }) {
               style={{
                 fontSize:    24,
                 padding:     '6px 10px',
+                minHeight:   44,
+                minWidth:    44,
                 borderRadius: 10,
                 cursor:      'pointer',
                 background:  form.quality === q ? 'var(--color-surface-2)' : 'none',
