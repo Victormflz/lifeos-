@@ -6,12 +6,10 @@ import { API_URL as API } from '../config'
 export default function Login() {
   const { login, token } = useAuth()
   const navigate = useNavigate()
-  const [mode, setMode] = useState('login') // 'login' | 'register'
   const [form, setForm] = useState({ email: '', password: '' })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  // Si ya hay sesión activa, ir directo al dashboard
   useEffect(() => {
     if (token) navigate('/', { replace: true })
   }, [token, navigate])
@@ -21,13 +19,13 @@ export default function Login() {
     setError('')
     setLoading(true)
     try {
-      const res = await fetch(`${API}/auth/${mode}`, {
+      const res = await fetch(`${API}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form)
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Error desconocido')
+      if (!res.ok) throw new Error(data.error || 'Credenciales incorrectas')
       login(data.accessToken, data.refreshToken)
       navigate('/')
     } catch (err) {
@@ -40,26 +38,16 @@ export default function Login() {
   return (
     <div style={wrapStyle}>
       <div style={cardStyle}>
-        <h1 style={{ fontSize: 26, marginBottom: 4 }}>🧠 LifeOS</h1>
-        <p style={{ color: 'var(--color-text-secondary)', fontSize: 13, marginBottom: 32 }}>Tu sistema operativo personal</p>
-
-        <div style={tabsStyle}>
-          <button
-            onClick={() => { setMode('login'); setError('') }}
-            style={tabStyle(mode === 'login')}
-          >
-            Entrar
-          </button>
-          <button
-            onClick={() => { setMode('register'); setError('') }}
-            style={tabStyle(mode === 'register')}
-          >
-            Registrarse
-          </button>
+        <div style={{ textAlign: 'center', marginBottom: 32 }}>
+          <div style={{ fontSize: 40, marginBottom: 8 }}>🧠</div>
+          <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>LifeOS</h1>
+          <p style={{ color: 'var(--color-text-secondary)', fontSize: 13, marginTop: 4, margin: '4px 0 0' }}>
+            Tu sistema operativo personal
+          </p>
         </div>
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 13, color: 'var(--color-text-secondary)' }}>
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <label style={labelStyle}>
             Email
             <input
               type="email"
@@ -72,21 +60,32 @@ export default function Login() {
               required
             />
           </label>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 13, color: 'var(--color-text-secondary)' }}>
+          <label style={labelStyle}>
             Contraseña
             <input
               type="password"
-              placeholder="Mínimo 8 caracteres"
+              placeholder="Tu contraseña"
               value={form.password}
               onChange={e => setForm({ ...form, password: e.target.value })}
               className="input-field"
-              autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+              autoComplete="current-password"
               required
             />
           </label>
-          {error && <p role="alert" style={{ color: 'var(--color-danger)', fontSize: 13, margin: 0 }}>{error}</p>}
-          <button type="submit" disabled={loading} className="btn btn-primary" style={{ marginTop: 4 }}>
-            {loading ? 'Procesando...' : mode === 'login' ? 'Entrar' : 'Crear cuenta'}
+
+          {error && (
+            <p role="alert" style={{ color: 'var(--color-danger)', fontSize: 13, margin: 0, textAlign: 'center' }}>
+              {error}
+            </p>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="btn btn-primary"
+            style={{ marginTop: 4, width: '100%' }}
+          >
+            {loading ? 'Entrando...' : 'Entrar'}
           </button>
         </form>
       </div>
@@ -95,23 +94,29 @@ export default function Login() {
 }
 
 const wrapStyle = {
-  minHeight: '100dvh', display: 'flex', alignItems: 'center',
-  justifyContent: 'center', background: 'var(--color-bg)', padding: '1rem'
+  minHeight: '100dvh',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  background: 'var(--color-bg)',
+  padding: '1.5rem',
 }
+
 const cardStyle = {
-  background: 'var(--color-surface)', borderRadius: 20, padding: '2rem',
-  width: '100%', maxWidth: 360, boxShadow: '0 8px 40px rgba(0,0,0,0.12)',
-  border: '1.5px solid var(--color-border)'
+  background: 'var(--color-surface)',
+  borderRadius: 20,
+  padding: '2rem',
+  width: '100%',
+  maxWidth: 360,
+  boxShadow: '0 8px 40px rgba(0,0,0,0.12)',
+  border: '1.5px solid var(--color-border)',
 }
-const tabsStyle = {
-  display: 'flex', marginBottom: 20,
-  borderRadius: 10, overflow: 'hidden', border: '1.5px solid var(--color-border)'
+
+const labelStyle = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 6,
+  fontSize: 13,
+  fontWeight: 500,
+  color: 'var(--color-text-secondary)',
 }
-const tabStyle = (active) => ({
-  flex: 1, padding: '10px 0', border: 'none', cursor: 'pointer', fontSize: 14,
-  fontWeight: active ? 600 : 400,
-  background: active ? 'var(--color-accent)' : 'var(--color-surface)',
-  color: active ? 'var(--color-accent-text)' : 'var(--color-text-secondary)',
-  transition: 'all 0.15s',
-  fontFamily: 'inherit'
-})
