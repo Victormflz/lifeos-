@@ -2,7 +2,6 @@ const express = require('express')
 const cors = require('cors')
 const helmet = require('helmet')
 const rateLimit = require('express-rate-limit')
-const mongoSanitize = require('express-mongo-sanitize')
 const mongoose = require('mongoose')
 require('dotenv').config()
 
@@ -59,9 +58,7 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization']
 }))
 
-// Body parsing + sanitización NoSQL
 app.use(express.json({ limit: '50kb' }))
-app.use(mongoSanitize())
 
 // Rate limit global (100 req / 15 min) — /auth/* tiene su propio límite más estricto
 app.use(rateLimit({
