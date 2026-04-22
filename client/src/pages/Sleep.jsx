@@ -9,9 +9,9 @@ import {
   LineElement,
   PointElement,
 } from 'chart.js'
-import { useAuth } from '../context/AuthContext'
+
 import { useTheme } from '../context/ThemeContext'
-import { API_URL as API } from '../config'
+import { API_URL as API, authHeaders } from '../config'
 import { exportToCsv } from '../utils/exportCsv'
 
 ChartJS.register(BarElement, CategoryScale, LinearScale, Tooltip, LineElement, PointElement)
@@ -116,13 +116,7 @@ function SleepFormFields({ form, setForm }) {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function Sleep() {
-  const { token }  = useAuth()
   const { theme }  = useTheme()
-
-  const authHeader = useMemo(
-    () => ({ Authorization: `Bearer ${token}` }),
-    [token]
-  )
 
   const [records,    setRecords]    = useState([])
   const [showForm,   setShowForm]   = useState(false)
@@ -134,13 +128,13 @@ export default function Sleep() {
 
   const fetchRecords = useCallback(async () => {
     try {
-      const res = await fetch(`${API}/sleep`, { headers: authHeader })
+      const res = await fetch(`${API}/sleep`, { headers: authHeaders() })
       if (!res.ok) throw new Error()
       setRecords(await res.json())
     } catch {
       setError('No se pudieron cargar los registros de sueño')
     }
-  }, [authHeader])
+  }, [])
 
   useEffect(() => { fetchRecords() }, [fetchRecords])
 
@@ -151,7 +145,7 @@ export default function Sleep() {
     try {
       const res = await fetch(`${API}/sleep`, {
         method:  'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeader },
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body:    JSON.stringify({ ...form, quality: Number(form.quality) }),
       })
       const data = await res.json()
@@ -168,7 +162,7 @@ export default function Sleep() {
 
   async function handleDelete(id) {
     try {
-      await fetch(`${API}/sleep/${id}`, { method: 'DELETE', headers: authHeader })
+      await fetch(`${API}/sleep/${id}`, { method: 'DELETE', headers: authHeaders() })
       setRecords(prev => prev.filter(r => r._id !== id))
     } catch {
       setError('Error al eliminar el registro')
@@ -191,7 +185,7 @@ export default function Sleep() {
     try {
       const res = await fetch(`${API}/sleep/${id}`, {
         method:  'PUT',
-        headers: { 'Content-Type': 'application/json', ...authHeader },
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body:    JSON.stringify({ ...editForm, quality: Number(editForm.quality) }),
       })
       const data = await res.json()

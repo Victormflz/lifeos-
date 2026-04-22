@@ -9,9 +9,9 @@ import {
   CategoryScale,
   Tooltip,
 } from 'chart.js'
-import { useAuth } from '../context/AuthContext'
+
 import { useTheme } from '../context/ThemeContext'
-import { API_URL as API } from '../config'
+import { API_URL as API, authHeaders } from '../config'
 
 ChartJS.register(LineElement, PointElement, LinearScale, CategoryScale, Tooltip)
 
@@ -112,13 +112,7 @@ function ScoreChart({ history }) {
 }
 
 export default function Today() {
-  const { token } = useAuth()
   const { theme } = useTheme()
-
-  const authHeader = useMemo(
-    () => ({ Authorization: `Bearer ${token}` }),
-    [token]
-  )
 
   const todayStr = useMemo(() => new Date().toISOString().split('T')[0], [])
 
@@ -134,7 +128,7 @@ export default function Today() {
 
   const fetchHabits = useCallback(async () => {
     try {
-      const res  = await fetch(`${API}/habits`, { headers: authHeader })
+      const res  = await fetch(`${API}/habits`, { headers: authHeaders() })
       if (!res.ok) throw new Error()
       const data = await res.json()
       setHabits(data.filter(h => !h.frequency || h.frequency === 'daily'))
@@ -143,13 +137,13 @@ export default function Today() {
     } finally {
       setHabitsLoading(false)
     }
-  }, [authHeader])
+  }, [])
 
   async function toggleHabit(id) {
     try {
       const res = await fetch(`${API}/habits/${id}/toggle`, {
         method:  'PATCH',
-        headers: { ...authHeader, 'Content-Type': 'application/json' },
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
         body:    JSON.stringify({ date: todayStr }),
       })
       if (!res.ok) return
@@ -166,7 +160,7 @@ export default function Today() {
 
   const fetchWorkouts = useCallback(async () => {
     try {
-      const res  = await fetch(`${API}/workouts?date=${todayStr}`, { headers: authHeader })
+      const res  = await fetch(`${API}/workouts?date=${todayStr}`, { headers: authHeaders() })
       if (!res.ok) throw new Error()
       const data = await res.json()
       setWorkoutCount(data.length)
@@ -175,7 +169,7 @@ export default function Today() {
     } finally {
       setWorkoutsLoading(false)
     }
-  }, [authHeader, todayStr])
+  }, [todayStr])
 
   // ── Sleep ─────────────────────────────────────────────────────────────────
   const [lastSleep,    setLastSleep]    = useState(null)
@@ -184,7 +178,7 @@ export default function Today() {
 
   const fetchSleep = useCallback(async () => {
     try {
-      const res  = await fetch(`${API}/sleep/week`, { headers: authHeader })
+      const res  = await fetch(`${API}/sleep/week`, { headers: authHeaders() })
       if (!res.ok) throw new Error()
       const data = await res.json()
       setWeekSleep(data)
@@ -195,18 +189,18 @@ export default function Today() {
     } finally {
       setSleepLoading(false)
     }
-  }, [authHeader, todayStr, yesterdayStr])
+  }, [todayStr, yesterdayStr])
 
   // ── Gym Records ───────────────────────────────────────────────────────────
   const [gymRecords, setGymRecords] = useState([])
 
   const fetchGymRecords = useCallback(async () => {
     try {
-      const res = await fetch(`${API}/workouts/records`, { headers: authHeader })
+      const res = await fetch(`${API}/workouts/records`, { headers: authHeaders() })
       if (!res.ok) throw new Error()
       setGymRecords(await res.json())
     } catch { /* silencioso */ }
-  }, [authHeader])
+  }, [])
 
   // ── Insights ──────────────────────────────────────────────────────────────
   const [insights,        setInsights]        = useState([])
@@ -217,7 +211,7 @@ export default function Today() {
 
   const fetchInsights = useCallback(async () => {
     try {
-      const res  = await fetch(`${API}/insights`, { headers: authHeader })
+      const res  = await fetch(`${API}/insights`, { headers: authHeaders() })
       if (!res.ok) throw new Error()
       const data = await res.json()
       setInsights(data.insights || [])
@@ -226,15 +220,15 @@ export default function Today() {
     } catch { /* silencioso */ } finally {
       setInsightsLoading(false)
     }
-  }, [authHeader])
+  }, [])
 
   const fetchScoreHistory = useCallback(async () => {
     try {
-      const res  = await fetch(`${API}/insights/score/history`, { headers: authHeader })
+      const res  = await fetch(`${API}/insights/score/history`, { headers: authHeaders() })
       if (!res.ok) throw new Error()
       setScoreHistory(await res.json())
     } catch { /* silencioso */ }
-  }, [authHeader])
+  }, [])
 
   // ── Initial load ──────────────────────────────────────────────────────────
   useEffect(() => {

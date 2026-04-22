@@ -1,13 +1,12 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import WorkoutChart from '../WorkoutChart'
-import { useAuth } from '../context/AuthContext'
-import { API_URL as API } from '../config'
+
+import { API_URL as API, authHeaders } from '../config'
 import { exportToCsv } from '../utils/exportCsv'
 
 const HISTORY_LIMIT = 50
 
 export default function GymTracker() {
-  const { token } = useAuth()
   // todayWorkouts: sesión del día (siempre filtrada por ?date=hoy)
   const [todayWorkouts, setTodayWorkouts] = useState([])
   const [todayLoading, setTodayLoading] = useState(true)
@@ -34,18 +33,13 @@ export default function GymTracker() {
   const [editingId, setEditingId] = useState(null)
   const [editForm, setEditForm] = useState({ exercise: '', sets: '', reps: '', weight: '', notes: '' })
 
-  const authHeader = useMemo(
-    () => ({ Authorization: `Bearer ${token}` }),
-    [token]
-  )
-
   const todayStr = useMemo(() => new Date().toISOString().split('T')[0], [])
 
   // Carga los entrenamientos de HOY (filtro de fecha obligatorio — evita cargar historial)
   const fetchTodayWorkouts = useCallback(async () => {
     setTodayLoading(true)
     try {
-      const res = await fetch(`${API}/workouts?date=${todayStr}`, { headers: authHeader })
+      const res = await fetch(`${API}/workouts?date=${todayStr}`, { headers: authHeaders() })
       if (!res.ok) throw new Error('Error al cargar')
       setTodayWorkouts(await res.json())
     } catch {
@@ -53,14 +47,14 @@ export default function GymTracker() {
     } finally {
       setTodayLoading(false)
     }
-  }, [authHeader, todayStr])
+  }, [todayStr])
 
   // Carga el historial paginado para el gráfico (sin filtro de fecha, con limit/skip)
   const fetchHistory = useCallback(async (pageNum = 0) => {
     setHistoryLoading(true)
     try {
       const skip = pageNum * HISTORY_LIMIT
-      const res  = await fetch(`${API}/workouts?limit=${HISTORY_LIMIT}&skip=${skip}`, { headers: authHeader })
+      const res  = await fetch(`${API}/workouts?limit=${HISTORY_LIMIT}&skip=${skip}`, { headers: authHeaders() })
       if (!res.ok) return
       const data  = await res.json()
       const total = parseInt(res.headers.get('X-Total-Count') || '0')
@@ -70,18 +64,18 @@ export default function GymTracker() {
       else setWorkouts(prev => [...prev, ...data])
     } catch { /* silencioso — el chart es opcional */ }
     finally { setHistoryLoading(false) }
-  }, [authHeader])
+  }, [])
 
   const fetchRecords = useCallback(async () => {
     try {
-      const res = await fetch(`${API}/workouts/records`, { headers: authHeader })
+      const res = await fetch(`${API}/workouts/records`, { headers: authHeaders() })
       if (!res.ok) return
       const data = await res.json()
       const map = {}
       data.forEach(r => { map[r.exercise] = { weight: r.weight, date: r.date } })
       setRecords(map)
     } catch { /* silencioso — records son opcionales */ }
-  }, [authHeader])
+  }, [])
 
   useEffect(() => {
     fetchTodayWorkouts()
@@ -105,7 +99,7 @@ export default function GymTracker() {
     try {
       const res = await fetch(`${API}/workouts`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeader },
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify(form)
       })
       if (!res.ok) throw new Error('Error al guardar')
@@ -127,7 +121,7 @@ export default function GymTracker() {
 
   async function handleDelete(id) {
     try {
-      await fetch(`${API}/workouts/${id}`, { method: 'DELETE', headers: authHeader })
+      await fetch(`${API}/workouts/${id}`, { method: 'DELETE', headers: authHeaders() })
       fetchTodayWorkouts()
       fetchHistory(0)
       fetchRecords()
@@ -145,7 +139,7 @@ export default function GymTracker() {
     try {
       const res = await fetch(`${API}/workouts/${id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', ...authHeader },
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify(editForm)
       })
       if (!res.ok) throw new Error('Error al actualizar')
@@ -336,7 +330,7 @@ export default function GymTracker() {
             const next = !showWeekly
             setShowWeekly(next)
             if (next && weeklySummary.length === 0) {
-              fetch(`${API}/workouts/weekly-summary`, { headers: authHeader })
+              fetch(`${API}/workouts/weekly-summary`, { headers: authHeaders() })
                 .then(r => r.json())
                 .then(setWeeklySummary)
                 .catch(() => {})

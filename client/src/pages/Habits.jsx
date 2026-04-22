@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useAuth } from '../context/AuthContext'
-import { API_URL as API } from '../config'
+
+import { API_URL as API, authHeaders } from '../config'
 import { exportToCsv } from '../utils/exportCsv'
 
 const EMOJIS = ['⭐', '💧', '📚', '🏃', '🧘', '🥗', '😴', '💊', '🧹', '✍️']
@@ -64,7 +64,6 @@ function getStreak(completions, frequency = 'daily') {
 }
 
 export default function Habits() {
-  const { token } = useAuth()
   const [habits, setHabits] = useState([])
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ name: '', emoji: '⭐', frequency: 'daily' })
@@ -73,19 +72,18 @@ export default function Habits() {
   const [editingId, setEditingId] = useState(null)
   const [editForm, setEditForm] = useState({ name: '', emoji: '⭐', frequency: 'daily' })
 
-  const authHeader = { Authorization: `Bearer ${token}` }
   const today = new Date().toISOString().split('T')[0]
 
   const fetchHabits = useCallback(async () => {
     try {
-      const res = await fetch(`${API}/habits`, { headers: authHeader })
+      const res = await fetch(`${API}/habits`, { headers: authHeaders() })
       if (!res.ok) throw new Error()
       const data = await res.json()
       setHabits(data)
     } catch {
       setError('No se pudieron cargar los hábitos')
     }
-  }, [token]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => { fetchHabits() }, [fetchHabits])
 
@@ -95,7 +93,7 @@ export default function Habits() {
     try {
       const res = await fetch(`${API}/habits`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeader },
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify(form)
       })
       if (!res.ok) throw new Error()
@@ -113,7 +111,7 @@ export default function Habits() {
     try {
       const res = await fetch(`${API}/habits/${id}/toggle`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', ...authHeader },
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({ date: today })
       })
       if (!res.ok) throw new Error()
@@ -126,7 +124,7 @@ export default function Habits() {
 
   async function handleDelete(id) {
     try {
-      await fetch(`${API}/habits/${id}`, { method: 'DELETE', headers: authHeader })
+      await fetch(`${API}/habits/${id}`, { method: 'DELETE', headers: authHeaders() })
       setHabits(prev => prev.filter(h => h._id !== id))
     } catch {
       setError('Error al eliminar el hábito')
@@ -143,7 +141,7 @@ export default function Habits() {
     try {
       const res = await fetch(`${API}/habits/${id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', ...authHeader },
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify(editForm)
       })
       if (!res.ok) throw new Error()

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useAuth } from '../context/AuthContext'
-import { API_URL as API } from '../config'
+
+import { API_URL as API, authHeaders } from '../config'
 import { exportToCsv } from '../utils/exportCsv'
 
 const LIMIT = 20
@@ -14,7 +14,6 @@ function formatDate(iso) {
 }
 
 export default function Notes() {
-  const { token } = useAuth()
   const [notes, setNotes]         = useState([])
   const [total, setTotal]         = useState(0)
   const [page, setPage]           = useState(0)
@@ -28,8 +27,6 @@ export default function Notes() {
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch]           = useState('')
   const [activeTag, setActiveTag]     = useState('')
-
-  const authHeader = { Authorization: `Bearer ${token}` }
 
   // Debounce: 350ms tras dejar de escribir
   useEffect(() => {
@@ -47,7 +44,7 @@ export default function Notes() {
         // Búsqueda full-text (índice $text en MongoDB, sin paginación — devuelve top 20)
         const res = await fetch(
           `${API}/notes/search?q=${encodeURIComponent(search.trim())}`,
-          { headers: authHeader }
+          { headers: authHeaders() }
         )
         if (!res.ok) throw new Error()
         data     = await res.json()
@@ -56,7 +53,7 @@ export default function Notes() {
         // Listado paginado, opcionalmente filtrado por tag
         const params = new URLSearchParams({ limit: LIMIT, skip: pageNum * LIMIT })
         if (activeTag) params.set('tag', activeTag)
-        const res = await fetch(`${API}/notes?${params}`, { headers: authHeader })
+        const res = await fetch(`${API}/notes?${params}`, { headers: authHeaders() })
         if (!res.ok) throw new Error()
         data     = await res.json()
         newTotal = parseInt(res.headers.get('X-Total-Count') || '0')
@@ -71,7 +68,7 @@ export default function Notes() {
     } finally {
       setLoading(false)
     }
-  }, [token, search, activeTag]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [search, activeTag])
 
   // Re-fetch desde el inicio cuando cambia search o activeTag
   useEffect(() => { fetchNotes(0) }, [fetchNotes])
@@ -83,7 +80,7 @@ export default function Notes() {
     try {
       const res = await fetch(`${API}/notes`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeader },
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({ ...newNote, tags: parseTags(newNote.tags) })
       })
       if (!res.ok) {
@@ -109,7 +106,7 @@ export default function Notes() {
     try {
       const res = await fetch(`${API}/notes/${id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', ...authHeader },
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({ ...editForm, tags: parseTags(editForm.tags) })
       })
       if (!res.ok) {
@@ -127,7 +124,7 @@ export default function Notes() {
   async function handleDelete(id) {
     setError('')
     try {
-      const res = await fetch(`${API}/notes/${id}`, { method: 'DELETE', headers: authHeader })
+      const res = await fetch(`${API}/notes/${id}`, { method: 'DELETE', headers: authHeaders() })
       if (!res.ok) throw new Error('Error al eliminar')
       setNotes(prev => prev.filter(n => n._id !== id))
       setTotal(prev => prev - 1)
