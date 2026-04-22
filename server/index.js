@@ -48,14 +48,16 @@ const allowedOrigins = buildAllowedOrigins()
 
 app.use(cors({
   origin(origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true)
-    } else {
-      callback(Object.assign(new Error('CORS: origen no permitido'), { status: 403 }))
-    }
+    // No origin = server-to-server or curl — always allow
+    if (!origin) return callback(null, true)
+    // No allowedOrigins configured = open mode (GUEST_MODE app, no auth)
+    if (allowedOrigins.length === 0) return callback(null, true)
+    if (allowedOrigins.includes(origin)) return callback(null, true)
+    callback(Object.assign(new Error('CORS: origen no permitido'), { status: 403 }))
   },
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: false,
 }))
 
 app.use(express.json({ limit: '50kb' }))

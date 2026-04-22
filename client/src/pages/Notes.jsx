@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 
 import { API_URL as API, authHeaders } from '../config'
+import { apiFetch } from '../utils/apiFetch'
 import { exportToCsv } from '../utils/exportCsv'
 
 const LIMIT = 20
@@ -41,21 +42,17 @@ export default function Notes() {
       let data, newTotal
 
       if (search.trim()) {
-        // Búsqueda full-text (índice $text en MongoDB, sin paginación — devuelve top 20)
-        const res = await fetch(
-          `${API}/notes/search?q=${encodeURIComponent(search.trim())}`,
-          { headers: authHeaders() }
-        )
-        if (!res.ok) throw new Error()
-        data     = await res.json()
+        data     = await apiFetch(`${API}/notes/search?q=${encodeURIComponent(search.trim())}`, { headers: authHeaders() })
         newTotal = data.length
       } else {
-        // Listado paginado, opcionalmente filtrado por tag
         const params = new URLSearchParams({ limit: LIMIT, skip: pageNum * LIMIT })
         if (activeTag) params.set('tag', activeTag)
-        const res = await fetch(`${API}/notes?${params}`, { headers: authHeaders() })
-        if (!res.ok) throw new Error()
+        // Need raw fetch here to read the X-Total-Count header
+        let res
+        try { res = await fetch(`${API}/notes?${params}`, { headers: authHeaders() }) }
+        catch { throw new Error('Sin conexión con el servidor') }
         data     = await res.json()
+        if (!res.ok) throw new Error(data?.error || `Error ${res.status}`)
         newTotal = parseInt(res.headers.get('X-Total-Count') || '0')
       }
 
@@ -63,8 +60,8 @@ export default function Notes() {
       setPage(pageNum)
       if (pageNum === 0) setNotes(data)
       else setNotes(prev => [...prev, ...data])
-    } catch {
-      setError('No se pudieron cargar las notas')
+    } catch (err) {
+      setError(err.message)
     } finally {
       setLoading(false)
     }
@@ -78,17 +75,13 @@ export default function Notes() {
     if (!newNote.title.trim()) return
     setError('')
     try {
-      const res = await fetch(`${API}/notes`, {
+      await apiFetch(`${API}/notes`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({ ...newNote, tags: parseTags(newNote.tags) })
+        body: JSON.stringify({ ...newNote, tags: parseTags(newNote.tags) }),
       })
-      if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || 'Error al crear')
-      }
       setNewNote({ title: '', content: '', tags: '' })
-      fetchNotes(0) // recarga desde la primera página
+      fetchNotes(0)
     } catch (err) {
       setError(err.message)
     }
@@ -104,16 +97,11 @@ export default function Notes() {
     if (!editForm.title.trim()) return
     setError('')
     try {
-      const res = await fetch(`${API}/notes/${id}`, {
+      const updated = await apiFetch(`${API}/notes/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({ ...editForm, tags: parseTags(editForm.tags) })
+        body: JSON.stringify({ ...editForm, tags: parseTags(editForm.tags) }),
       })
-      if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || 'Error al guardar')
-      }
-      const updated = await res.json()
       setNotes(prev => prev.map(n => n._id === id ? updated : n))
       setEditingId(null)
     } catch (err) {
@@ -124,8 +112,7 @@ export default function Notes() {
   async function handleDelete(id) {
     setError('')
     try {
-      const res = await fetch(`${API}/notes/${id}`, { method: 'DELETE', headers: authHeaders() })
-      if (!res.ok) throw new Error('Error al eliminar')
+      await apiFetch(`${API}/notes/${id}`, { method: 'DELETE', headers: authHeaders() })
       setNotes(prev => prev.filter(n => n._id !== id))
       setTotal(prev => prev - 1)
       if (expandedId === id) setExpandedId(null)

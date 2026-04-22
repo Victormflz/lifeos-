@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import WorkoutChart from '../WorkoutChart'
 
 import { API_URL as API, authHeaders } from '../config'
+import { apiFetch } from '../utils/apiFetch'
 import { exportToCsv } from '../utils/exportCsv'
 
 const HISTORY_LIMIT = 50
@@ -39,11 +40,10 @@ export default function GymTracker() {
   const fetchTodayWorkouts = useCallback(async () => {
     setTodayLoading(true)
     try {
-      const res = await fetch(`${API}/workouts?date=${todayStr}`, { headers: authHeaders() })
-      if (!res.ok) throw new Error('Error al cargar')
-      setTodayWorkouts(await res.json())
-    } catch {
-      setError('No se pudieron cargar los entrenamientos')
+      const data = await apiFetch(`${API}/workouts?date=${todayStr}`, { headers: authHeaders() })
+      setTodayWorkouts(data)
+    } catch (err) {
+      setError(err.message)
     } finally {
       setTodayLoading(false)
     }
@@ -97,12 +97,11 @@ export default function GymTracker() {
     const isNewPR = Number(form.weight) > 0 &&
       (!records[form.exercise] || Number(form.weight) > records[form.exercise].weight)
     try {
-      const res = await fetch(`${API}/workouts`, {
+      await apiFetch(`${API}/workouts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify(form)
+        body: JSON.stringify(form),
       })
-      if (!res.ok) throw new Error('Error al guardar')
       setForm({ exercise: '', sets: '', reps: '', weight: '', notes: '' })
       fetchTodayWorkouts()
       fetchHistory(0)
@@ -121,12 +120,12 @@ export default function GymTracker() {
 
   async function handleDelete(id) {
     try {
-      await fetch(`${API}/workouts/${id}`, { method: 'DELETE', headers: authHeaders() })
+      await apiFetch(`${API}/workouts/${id}`, { method: 'DELETE', headers: authHeaders() })
       fetchTodayWorkouts()
       fetchHistory(0)
       fetchRecords()
-    } catch {
-      setError('Error al eliminar el ejercicio')
+    } catch (err) {
+      setError(err.message)
     }
   }
 
@@ -136,19 +135,19 @@ export default function GymTracker() {
   }
 
   async function handleEditSave(id) {
+    setError('')
     try {
-      const res = await fetch(`${API}/workouts/${id}`, {
+      await apiFetch(`${API}/workouts/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify(editForm)
+        body: JSON.stringify(editForm),
       })
-      if (!res.ok) throw new Error('Error al actualizar')
       setEditingId(null)
       fetchTodayWorkouts()
       fetchHistory(0)
       fetchRecords()
-    } catch {
-      setError('Error al actualizar el ejercicio')
+    } catch (err) {
+      setError(err.message)
     }
   }
 

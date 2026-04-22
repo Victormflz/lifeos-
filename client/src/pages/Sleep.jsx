@@ -12,6 +12,7 @@ import {
 
 import { useTheme } from '../context/ThemeContext'
 import { API_URL as API, authHeaders } from '../config'
+import { apiFetch } from '../utils/apiFetch'
 import { exportToCsv } from '../utils/exportCsv'
 
 ChartJS.register(BarElement, CategoryScale, LinearScale, Tooltip, LineElement, PointElement)
@@ -128,11 +129,10 @@ export default function Sleep() {
 
   const fetchRecords = useCallback(async () => {
     try {
-      const res = await fetch(`${API}/sleep`, { headers: authHeaders() })
-      if (!res.ok) throw new Error()
-      setRecords(await res.json())
-    } catch {
-      setError('No se pudieron cargar los registros de sueño')
+      const data = await apiFetch(`${API}/sleep`, { headers: authHeaders() })
+      setRecords(data)
+    } catch (err) {
+      setError(err.message)
     }
   }, [])
 
@@ -143,18 +143,16 @@ export default function Sleep() {
     setError('')
     setLoading(true)
     try {
-      const res = await fetch(`${API}/sleep`, {
+      await apiFetch(`${API}/sleep`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body:    JSON.stringify({ ...form, quality: Number(form.quality) }),
       })
-      const data = await res.json()
-      if (!res.ok) { setError(data.error || 'Error al crear el registro'); return }
       setForm(emptyForm())
       setShowForm(false)
       fetchRecords()
-    } catch {
-      setError('Error al crear el registro')
+    } catch (err) {
+      setError(err.message)
     } finally {
       setLoading(false)
     }
@@ -162,10 +160,10 @@ export default function Sleep() {
 
   async function handleDelete(id) {
     try {
-      await fetch(`${API}/sleep/${id}`, { method: 'DELETE', headers: authHeaders() })
+      await apiFetch(`${API}/sleep/${id}`, { method: 'DELETE', headers: authHeaders() })
       setRecords(prev => prev.filter(r => r._id !== id))
-    } catch {
-      setError('Error al eliminar el registro')
+    } catch (err) {
+      setError(err.message)
     }
   }
 
@@ -183,17 +181,15 @@ export default function Sleep() {
   async function handleEditSave(id) {
     setError('')
     try {
-      const res = await fetch(`${API}/sleep/${id}`, {
+      const data = await apiFetch(`${API}/sleep/${id}`, {
         method:  'PUT',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body:    JSON.stringify({ ...editForm, quality: Number(editForm.quality) }),
       })
-      const data = await res.json()
-      if (!res.ok) { setError(data.error || 'Error al actualizar'); return }
       setRecords(prev => prev.map(r => r._id === id ? data : r))
       setEditingId(null)
-    } catch {
-      setError('Error al actualizar el registro')
+    } catch (err) {
+      setError(err.message)
     }
   }
 

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 
 import { API_URL as API, authHeaders } from '../config'
+import { apiFetch } from '../utils/apiFetch'
 import { exportToCsv } from '../utils/exportCsv'
 
 const EMOJIS = ['⭐', '💧', '📚', '🏃', '🧘', '🥗', '😴', '💊', '🧹', '✍️']
@@ -176,11 +177,10 @@ export default function Habits() {
 
   const fetchHabits = useCallback(async () => {
     try {
-      const res = await fetch(`${API}/habits`, { headers: authHeaders() })
-      if (!res.ok) throw new Error()
-      setHabits(await res.json())
-    } catch {
-      setError('No se pudieron cargar los hábitos')
+      const data = await apiFetch(`${API}/habits`, { headers: authHeaders() })
+      setHabits(data)
+    } catch (err) {
+      setError(err.message)
     }
   }, [])
 
@@ -204,19 +204,19 @@ export default function Habits() {
 
   async function handleCreate(e) {
     e.preventDefault()
+    setError('')
     setLoading(true)
     try {
-      const res = await fetch(`${API}/habits`, {
+      await apiFetch(`${API}/habits`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify(form),
       })
-      if (!res.ok) throw new Error()
       setForm({ name: '', emoji: '⭐', frequency: 'daily' })
       setShowForm(false)
       fetchHabits()
-    } catch {
-      setError('Error al crear el hábito')
+    } catch (err) {
+      setError(err.message)
     } finally {
       setLoading(false)
     }
@@ -224,26 +224,24 @@ export default function Habits() {
 
   async function handleToggle(id) {
     try {
-      const res = await fetch(`${API}/habits/${id}/toggle`, {
+      const updated = await apiFetch(`${API}/habits/${id}/toggle`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({ date: today }),
       })
-      if (!res.ok) throw new Error()
-      const updated = await res.json()
       setHabits(prev => prev.map(h => h._id === id ? updated : h))
-    } catch {
-      setError('Error al actualizar el hábito')
+    } catch (err) {
+      setError(err.message)
     }
   }
 
   async function handleDelete(id) {
     try {
-      await fetch(`${API}/habits/${id}`, { method: 'DELETE', headers: authHeaders() })
+      await apiFetch(`${API}/habits/${id}`, { method: 'DELETE', headers: authHeaders() })
       setHabits(prev => prev.filter(h => h._id !== id))
       if (expandedId === id) setExpandedId(null)
-    } catch {
-      setError('Error al eliminar el hábito')
+    } catch (err) {
+      setError(err.message)
     }
   }
 
@@ -255,18 +253,17 @@ export default function Habits() {
 
   async function handleEditHabitSave(id) {
     if (!editForm.name.trim()) return
+    setError('')
     try {
-      const res = await fetch(`${API}/habits/${id}`, {
+      const updated = await apiFetch(`${API}/habits/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify(editForm),
       })
-      if (!res.ok) throw new Error()
-      const updated = await res.json()
       setHabits(prev => prev.map(h => h._id === id ? updated : h))
       setEditingId(null)
-    } catch {
-      setError('Error al actualizar el hábito')
+    } catch (err) {
+      setError(err.message)
     }
   }
 
