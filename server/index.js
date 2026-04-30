@@ -27,31 +27,19 @@ app.use(helmet({
   contentSecurityPolicy: false
 }))
 
-// CORS
-const DEV_ORIGINS = ['http://localhost:5173', 'http://localhost:4173']
-
-function buildAllowedOrigins() {
-  if (process.env.NODE_ENV !== 'production') return DEV_ORIGINS
-
-  const raw = process.env.ALLOWED_ORIGIN || ''
-  const origins = raw.split(',').map(o => o.trim()).filter(Boolean)
-
-  if (origins.length === 0) {
-    console.warn(
-      '[CORS] ⚠️  ALLOWED_ORIGIN no definida — peticiones cross-origin serán rechazadas'
-    )
-  }
-  return origins
-}
-
-const allowedOrigins = buildAllowedOrigins()
+// CORS — siempre incluye localhost + cualquier origen en ALLOWED_ORIGIN
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:4173',
+  ...(process.env.ALLOWED_ORIGIN || '')
+    .split(',')
+    .map(o => o.trim())
+    .filter(Boolean),
+]
 
 app.use(cors({
   origin(origin, callback) {
-    // No origin = server-to-server or curl — always allow
     if (!origin) return callback(null, true)
-    // No allowedOrigins configured = open mode (GUEST_MODE app, no auth)
-    if (allowedOrigins.length === 0) return callback(null, true)
     if (allowedOrigins.includes(origin)) return callback(null, true)
     callback(Object.assign(new Error('CORS: origen no permitido'), { status: 403 }))
   },
