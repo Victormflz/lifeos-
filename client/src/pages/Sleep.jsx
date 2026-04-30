@@ -141,6 +141,10 @@ export default function Sleep() {
   async function handleCreate(e) {
     e.preventDefault()
     setError('')
+    if (records.some(r => r.date === form.date)) {
+      setError('Ya tienes un registro para esa fecha. Edítalo desde la lista.')
+      return
+    }
     setLoading(true)
     try {
       await apiFetch(`${API}/sleep`, {

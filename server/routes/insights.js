@@ -200,8 +200,6 @@ router.get('/', requireAuth, async (req, res, next) => {
   }
 })
 
-module.exports = router
-
 // ── GET /api/insights/score/history ─────────────────────────────────────────
 // Últimos 30 días de Life Score del usuario (orden ascendente para gráfica)
 

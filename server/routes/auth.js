@@ -6,6 +6,7 @@ const crypto = require('crypto')
 const rateLimit = require('express-rate-limit')
 const User = require('../models/User')
 const RefreshToken = require('../models/RefreshToken')
+const requireAuth = require('../middleware/auth')
 
 const SALT_ROUNDS = 12
 const EMAIL_RE    = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -129,6 +130,39 @@ router.post('/logout', async (req, res, next) => {
     if (refreshToken) {
       await RefreshToken.deleteOne({ token: refreshToken })
     }
+    res.json({ ok: true })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// ── GET /api/auth/me ─────────────────────────────────────────────────────────
+router.get('/me', requireAuth, async (req, res, next) => {
+  try {
+    const user = await User.findById(req.userId).select('email createdAt')
+    if (!user) return res.status(404).json({ error: 'Usuario no encontrado' })
+    res.json({ email: user.email, createdAt: user.createdAt })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// ── PATCH /api/auth/password ─────────────────────────────────────────────────
+router.patch('/password', requireAuth, async (req, res, next) => {
+  try {
+    const { currentPassword, newPassword } = req.body
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Se requieren la contraseña actual y la nueva' })
+    }
+    if (newPassword.length < 8) {
+      return res.status(400).json({ error: 'La nueva contraseña debe tener al menos 8 caracteres' })
+    }
+    const user = await User.findById(req.userId)
+    if (!user) return res.status(404).json({ error: 'Usuario no encontrado' })
+    const match = await bcrypt.compare(currentPassword, user.password)
+    if (!match) return res.status(401).json({ error: 'Contraseña actual incorrecta' })
+    user.password = await bcrypt.hash(newPassword, SALT_ROUNDS)
+    await user.save()
     res.json({ ok: true })
   } catch (err) {
     next(err)
